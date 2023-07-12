@@ -1,0 +1,30 @@
+databaseChangeLog:
+  - objectQuotingStrategy: QUOTE_ALL_OBJECTS
+  - changeSet:
+      id: add-comment-view-count-column
+      author: juyeon.yu@coway.com
+      changes:
+        - addColumn:
+            tableName: comment
+            columns:
+              - column:
+                  name: view_count
+                  remarks: 조회 수
+                  type: int
+                  constraints:
+                    nullable: false
+                  defaultValueNumeric: "0"
+        - addColumn:
+            tableName: comment_audit
+            columns:
+              - column:
+                  name: view_count
+                  remarks: 레코드 수정 전 조회 수
+                  type: int
+                  constraints:
+                    nullable: false
+                  defaultValueNumeric: "0"
+                  # audit 테이블의 기존 데이터를 위해 default value 설정 후 제약조건 삭제 처리
+        - dropDefaultValue:
+            tableName: comment_audit
+            columnName: view_count

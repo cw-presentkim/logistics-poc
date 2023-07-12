@@ -1,0 +1,8 @@
+databaseChangeLog:
+  # 테이블명, 컬럼명등의 대소문자 구분이 DB Engine 의존적이지 않도록 설정
+  # jooq-meta-extensions-liquibase 에서 h2 를 이용하고 있으며 h2 는 기본설정이 UpperCase 이기때문에 이를 해결하기 위함.
+  - objectQuotingStrategy: QUOTE_ALL_OBJECTS
+  - includeAll:
+      path: /db/changelog/changesets
+  - include:
+      file: /db/changelog/local-data.yaml

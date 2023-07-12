@@ -1,0 +1,9 @@
+databaseChangeLog:
+  - changeSet:
+      id: local-data-for-develop
+      author: juyeon.yu@coway.com
+      context: 'local'
+      dbms: '!h2'
+      changes:
+        - sqlFile:
+            path: classpath:/db/changelog/local-data.sql

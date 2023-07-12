@@ -1,0 +1,43 @@
+// https://dbml.dbdiagram.io/docs/
+
+Project project_name {
+  database_type: 'PostgreSQL'
+  Note: 'Example Schemas'
+}
+
+Table comment {
+  comment_key int           [primary key, increment,                 note: '레코드 식별자']
+  comment_id  char(16)      [not null,                               note: '댓글 식별자']
+  contents    varchar(2000) [not null,                               note: '댓글 내용']
+  view_count  int           [not null, default: 0,                   note: '조회 수']
+  deleted     bool          [not null, default: false,               note: '레코드 삭제 여부']
+  created_at  datetime      [not null, default: `CURRENT_TIMESTAMP`, note: '레코드 생성 일시']
+  created_by  varchar(20)   [not null, default: '_SYSTEM',           note: '레코드 생성 사용자 식별자']
+  updated_at  datetime      [not null, default: `CURRENT_TIMESTAMP`, note: '레코드 최종 수정 일시']
+  updated_by  varchar(20)   [not null, default: '_SYSTEM',           note: '레코드 최종 수정 사용자 식별자']
+
+  // Table Index
+  indexes {
+    (comment_id) [unique, name: 'comment_unique']
+  }
+
+  Note: '댓글'
+}
+
+Table comment_audit {
+  audit_key   bigint        [primary key, increment, note: '변경 이력 레코드 식별자']
+  comment_key int           [not null, note: '레코드 수정 전 원본 레코드 식별자']
+  comment_id  char(16)      [not null, note: '레코드 수정 전 댓글 식별자']
+  contents    varchar(2000) [not null, note: '레코드 수정 전 댓글 내용']
+  view_count  int           [not null, note: '레코드 수정 전 조회 수']
+  deleted     bool          [not null, note: '레코드 수정 전 원본 레코드 삭제 여부']
+  updated_at  datetime      [not null, note: '레코드 수정 전 원본 레코드 최종 수정 일시']
+  updated_by  varchar(20)   [not null, note: '레코드 수정 전 원본 레코드 최종 수정 사용자 식별자']
+
+  Note: '댓글 변경 이력'
+}
+
+// Table Foreign Key Relation
+Ref comment_audit_comment_key {
+  comment.comment_key < comment_audit.comment_key
+}

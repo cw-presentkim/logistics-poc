@@ -1,0 +1,144 @@
+name: Pull request merged actions
+
+on:
+  pull_request:
+    branches:
+      - 'main'
+    types:
+      - 'closed'
+
+jobs:
+  build_and_packaging:
+    if: ${{ github.event.pull_request.merged == true }}
+    name: Build code / Push the container image
+    runs-on: ubuntu-latest
+    env:
+      ENV_PROFILE_SUFFIX: stg
+    outputs:
+      container_tag: ${{ steps.generate_container_env.outputs.container_tag }}
+    steps:
+      - name: Source Checkout
+        uses: actions/checkout@v3
+
+      - name: Set up Amazon Corretto 17
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'corretto'
+          java-version: '17'
+          check-latest: true
+          cache: 'gradle'
+
+      - name: Build and test
+        run: ./gradlew test build --no-daemon
+
+      - name: Publish test report
+        if: always()
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        with:
+          junit_files: build/test-results/test/TEST-*.xml
+
+      - name: Generate Container Env
+        id: generate_container_env
+        run: |
+          COMMIT_SHA=${{ github.sha }}
+          echo "container_tag=sha-${COMMIT_SHA:0:7}" >> "$GITHUB_OUTPUT"
+          echo "container_repo=${{ vars.CW_AMERICA_ECR_HOST }}/${{ vars.PROJECT_NAME }}.${{ vars.SERVICE_NAME }}.${{ env.ENV_PROFILE_SUFFIX }}" >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.CW_AMERICA_STG_EKS_DEPLOY_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.CW_AMERICA_STG_EKS_DEPLOY_AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.CW_AMERICA_AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Package Container Image
+        run: |
+          ./gradlew \
+            -Djib.to.image=${{ steps.generate_container_env.outputs.container_repo }} \
+            -Djib.to.tags=${{ steps.generate_container_env.outputs.container_tag }} \
+            jib \
+            --no-daemon
+
+  deploy_staging_cluster:
+    name: Deploying - staging cluster
+    environment: staging
+    needs: build_and_packaging
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.CW_AMERICA_STG_EKS_DEPLOY_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.CW_AMERICA_STG_EKS_DEPLOY_AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.CW_AMERICA_AWS_REGION }}
+
+      - name: Install Kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Update kubernetes config
+        run: |
+          aws eks update-kubeconfig \
+            --region ${{ vars.CW_AMERICA_AWS_REGION }} \
+            --name ${{ vars.CW_AMERICA_STG_EKS_CLUSTER_NAME }}
+
+      - name: Deploy app using ArgoCD CLI
+        uses: clowdhaus/argo-cd-action/@main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CONTAINER_TAG: ${{ needs.build_and_packaging.outputs.container_tag }}
+        with:
+          command: app set "${{ vars.PROJECT_NAME }}.${{ vars.SERVICE_NAME }}"
+          options: |
+            --plaintext
+            --port-forward
+            --port-forward-namespace argocd
+            --auth-token ${{ secrets.CW_AMERICA_STG_EKS_ARGOCD_TOKEN }}
+            -p image.tag=${{ env.CONTAINER_TAG }}
+            -p app.version=${{ env.CONTAINER_TAG }}
+
+  code_analysis:
+    name: Analysis of code
+    runs-on: ubuntu-latest
+    steps:
+      - name: Source Checkout
+        uses: actions/checkout@v3
+
+      - name: Set up Amazon Corretto 17
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'corretto'
+          java-version: '17'
+          check-latest: true
+          cache: 'gradle'
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.CW_AMERICA_DEV_EKS_DEPLOY_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.CW_AMERICA_DEV_EKS_DEPLOY_AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.CW_AMERICA_AWS_REGION }}
+
+      - name: Install Kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Update kubernetes config
+        run: |
+          aws eks update-kubeconfig \
+            --region ${{ vars.CW_AMERICA_AWS_REGION }} \
+            --name ${{ vars.CW_AMERICA_DEV_EKS_CLUSTER_NAME }}
+
+      - name: Connecting to SonarQube using the Kubernetes port forwarding feature
+        run: |
+          SONAR_POD_NAME=`kubectl get pods -n devtools -l app=sonarqube -o=jsonpath="{.items[*].metadata.name}"`
+          kubectl port-forward pod/$SONAR_POD_NAME 9000:9000 -n devtools & # background required
+
+      - name: Run SonarQube Scanner
+        run: |
+          ./gradlew test sonar \
+            -Dsonar.host.url=http://localhost:9000 \
+            -Dsonar.token=${{ secrets.CW_AMERICA_SONARQUBE_ANALYSIS_TOKEN }} \
+            -Dsonar.projectKey=${{ vars.PROJECT_NAME }}.${{ vars.SERVICE_NAME }} \
+            --no-daemon

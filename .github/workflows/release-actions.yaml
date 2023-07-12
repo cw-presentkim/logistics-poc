@@ -1,0 +1,79 @@
+name: Release actions
+
+on:
+  release:
+    types:
+      - 'published'
+
+jobs:
+  copy_container_image:
+    name: Copy container image / staging -> production
+    runs-on: ubuntu-latest
+    env:
+      STG_ENV_PROFILE_SUFFIX: stg
+      PRD_ENV_PROFILE_SUFFIX: prd
+    outputs:
+      container_tag: ${{ steps.generate_container_env.outputs.dst_container_tag }}
+    steps:
+      - name: Generate Container Env
+        id: generate_container_env
+        run: |
+          COMMIT_SHA=${{ github.sha }}
+          echo "src_container_tag=sha-${COMMIT_SHA:0:7}" >> "$GITHUB_OUTPUT"
+          echo "dst_container_tag=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
+          echo "src_container_repo=${{ vars.CW_AMERICA_ECR_HOST }}/${{ vars.PROJECT_NAME }}.${{ vars.SERVICE_NAME }}.${{ env.STG_ENV_PROFILE_SUFFIX }}" >> "$GITHUB_OUTPUT"
+          echo "dst_container_repo=${{ vars.CW_AMERICA_ECR_HOST }}/${{ vars.PROJECT_NAME }}.${{ vars.SERVICE_NAME }}.${{ env.PRD_ENV_PROFILE_SUFFIX }}" >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.CW_AMERICA_PRD_EKS_DEPLOY_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.CW_AMERICA_PRD_EKS_DEPLOY_AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.CW_AMERICA_AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Copy container image
+        uses: akhilerm/tag-push-action@v2.1.0
+        with:
+          src: ${{ steps.generate_container_env.outputs.src_container_repo }}:${{ steps.generate_container_env.outputs.src_container_tag }}
+          dst: ${{ steps.generate_container_env.outputs.dst_container_repo }}:${{ steps.generate_container_env.outputs.dst_container_tag }}
+
+  deploy-production-cluster:
+    name: Deploying - production cluster
+    runs-on: ubuntu-latest
+    environment: production
+    needs: copy_container_image
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.CW_AMERICA_PRD_EKS_DEPLOY_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.CW_AMERICA_PRD_EKS_DEPLOY_AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.CW_AMERICA_AWS_REGION }}
+
+      - name: Install Kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Update kubernetes config
+        run: |
+          aws eks update-kubeconfig \
+            --region ${{ vars.CW_AMERICA_AWS_REGION }} \
+            --name ${{ vars.CW_AMERICA_PRD_EKS_CLUSTER_NAME }}
+
+      - name: Deploy app using ArgoCD CLI
+        uses: clowdhaus/argo-cd-action/@main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CONTAINER_TAG: ${{ needs.build_and_packaging.outputs.container_tag }}
+        with:
+          command: app set "${{ vars.PROJECT_NAME }}.${{ vars.SERVICE_NAME }}"
+          options: |
+            --plaintext
+            --port-forward
+            --port-forward-namespace argocd
+            --auth-token ${{ secrets.CW_AMERICA_STG_EKS_ARGOCD_TOKEN }}
+            --revision ${{ github.event.release.tag_name }}
+            -p image.tag=${{ env.CONTAINER_TAG }}
+            -p app.version=${{ env.CONTAINER_TAG }}

@@ -1,0 +1,33 @@
+# APPLICATION INFO
+application:
+  title: ${APP_NAME:Example} # 어플리케이션 이름, Banner 에 사용
+  version: ${APP_VERSION:N/A} # 어플리케이션 버전
+
+# EMBEDDED SERVER CONFIGURATION
+server:
+  compression:
+    enabled: true
+
+# SPRING CONFIGURATION
+spring:
+  profiles:
+    default: local
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    url: jdbc:postgresql://${JDBC_HOST:localhost}:${JDBC_PORT:5432}/${JDBC_DB_NAME:cw_america}
+    username: ${JDBC_USERNAME:cw_america}
+    password: ${JDBC_PASSWORD:cw_america}
+  liquibase:
+    contexts: ${spring.profiles.active:}
+    liquibase-schema: liquibase
+    database-change-log-table: database_changelog
+    database-change-log-lock-table: database_changelog_lock
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: https://api.cw-sdk.coway.do/oauth2/jwks
+
+coway-sdk:
+  security:
+    api-key: ${COWAY_SDK_API_KEY:}

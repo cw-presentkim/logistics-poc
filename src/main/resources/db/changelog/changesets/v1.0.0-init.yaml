@@ -1,0 +1,123 @@
+databaseChangeLog:
+  - objectQuotingStrategy: QUOTE_ALL_OBJECTS
+  - changeSet:
+      id: init
+      author: juyeon.yu@coway.com
+      changes:
+        - createTable:
+            tableName: comment
+            remarks: 댓글
+            columns:
+              - column:
+                  name: comment_key
+                  remarks: 레코드 식별자
+                  type: int
+                  autoIncrement: true
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+              - column:
+                  name: comment_id
+                  remarks: 댓글 식별자
+                  type: char(16)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: contents
+                  remarks: 댓글 내용
+                  type: varchar(2000)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: deleted
+                  remarks: 레코드 삭제 여부
+                  type: boolean
+                  constraints:
+                    nullable: false
+                  defaultValueBoolean: false
+              - column:
+                  name: created_at
+                  remarks: 레코드 생성 일시
+                  type: datetime
+                  constraints:
+                    nullable: false
+                  defaultValueComputed: CURRENT_TIMESTAMP
+              - column:
+                  name: created_by
+                  remarks: 레코드 생성 사용자 식별자
+                  type: varchar(20)
+                  constraints:
+                    nullable: false
+                  defaultValue: _SYSTEM
+              - column:
+                  name: updated_at
+                  remarks: 레코드 최종 수정 일시
+                  type: datetime
+                  constraints:
+                    nullable: false
+                  defaultValueComputed: CURRENT_TIMESTAMP
+              - column:
+                  name: updated_by
+                  remarks: 레코드 최종 수정 사용자 식별자
+                  type: varchar(20)
+                  constraints:
+                    nullable: false
+                  defaultValue: _SYSTEM
+        - addUniqueConstraint:
+            tableName: comment
+            columnNames: comment_id
+            constraintName: comment_unique
+        - createTable:
+            tableName: comment_audit
+            remarks: 댓글 변경 이력
+            columns:
+              - column:
+                  name: audit_key
+                  remarks: 변경 이력 레코드 식별자
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+              - column:
+                  name: comment_key
+                  remarks: 레코드 수정 전 원본 레코드 식별자
+                  type: int
+                  constraints:
+                    nullable: false
+              - column:
+                  name: comment_id
+                  remarks: 레코드 수정 전 댓글 식별자
+                  type: char(16)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: contents
+                  remarks: 레코드 수정 전 댓글 내용
+                  type: varchar(2000)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: deleted
+                  remarks: 레코드 수정 전 원본 레코드 삭제 여부
+                  type: boolean
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  remarks: 레코드 수정 전 원본 레코드 최종 수정 일시
+                  type: datetime
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_by
+                  remarks: 레코드 수정 전 원본 레코드 최종 수정 사용자 식별자
+                  type: varchar(20)
+                  constraints:
+                    nullable: false
+        - addForeignKeyConstraint:
+            baseTableName: comment_audit
+            baseColumnNames: comment_key
+            referencedTableName: comment
+            referencedColumnNames: comment_key
+            constraintName: comment_audit_comment_key

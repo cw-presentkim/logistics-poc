@@ -1,0 +1,39 @@
+name: Shutdown development cluster
+
+on:
+  schedule:
+    - cron: '0 13 * * 1-5' # 월요일 ~ 금요일 22시에 (cron timezone 은 utc)
+
+jobs:
+  shutdown:
+    name: Set pod replica to 0
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.CW_AMERICA_DEV_EKS_DEPLOY_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.CW_AMERICA_DEV_EKS_DEPLOY_AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.CW_AMERICA_AWS_REGION }}
+
+      - name: Install Kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Update kubernetes config
+        run: |
+          aws eks update-kubeconfig \
+            --region ${{ vars.CW_AMERICA_AWS_REGION }} \
+            --name ${{ vars.CW_AMERICA_DEV_EKS_CLUSTER_NAME }}
+
+      - name: Set replica count using ArgoCD CLI
+        uses: clowdhaus/argo-cd-action/@main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          command: app set "${{ vars.PROJECT_NAME }}.${{ vars.SERVICE_NAME }}"
+          options: |
+            --plaintext
+            --port-forward
+            --port-forward-namespace argocd
+            --auth-token ${{ secrets.CW_AMERICA_DEV_EKS_ARGOCD_TOKEN }}
+            -p replicaCount=0

@@ -1,0 +1,10 @@
+spring:
+  liquibase:
+    drop-first: true
+
+logging:
+  config: classpath:log4j2-spring-local.xml
+
+coway-sdk:
+  security:
+    debug: true

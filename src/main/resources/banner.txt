@@ -1,0 +1,1 @@
+COWAY AMERICA - ${application.title} ${application.version} :: Powered by Spring Boot${spring-boot.formatted-version} ::
