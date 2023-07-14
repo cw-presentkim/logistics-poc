@@ -1,8 +1,9 @@
 name: Startup development cluster
 
 on:
-  schedule:
-    - cron: '0 22 * * 0-4' # 월요일 ~ 금요일 07시에 (cron timezone 은 utc)
+  workflow_dispatch:
+  #schedule:
+  #  - cron: '0 22 * * 0-4' # 월요일 ~ 금요일 07시에 (cron timezone 은 utc)
 
 jobs:
   shutdown:
