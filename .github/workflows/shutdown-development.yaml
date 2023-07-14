@@ -1,8 +1,9 @@
 name: Shutdown development cluster
 
 on:
-  schedule:
-    - cron: '0 13 * * 1-5' # 월요일 ~ 금요일 22시에 (cron timezone 은 utc)
+  workflow_dispatch:
+#  schedule:
+#    - cron: '0 13 * * 1-5' # 월요일 ~ 금요일 22시에 (cron timezone 은 utc)
 
 jobs:
   shutdown:
